@@ -21,7 +21,7 @@
 
     <!-- Loading Overlay -->
     <div id="loading" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
-        <div class="bg-white p-5 rounded-lg flex items-center gap-3">
+        <div class="bg-white p-5 rounded-lg flex items-center gap-3 shadow-lg">
             <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-8 w-8"></div>
             <span class="text-gray-700 font-semibold">Memproses data...</span>
         </div>
@@ -36,11 +36,11 @@
             <form id="form-login" onsubmit="handleLogin(event)">
                 <div class="mb-4">
                     <label class="block text-gray-700 text-sm font-bold mb-2">Username</label>
-                    <input type="text" id="username" required class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <input type="text" id="username" required autocomplete="username" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
                 </div>
                 <div class="mb-6">
                     <label class="block text-gray-700 text-sm font-bold mb-2">Password</label>
-                    <input type="password" id="password" required class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <input type="password" id="password" required autocomplete="current-password" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
                 </div>
                 <button type="submit" class="w-full bg-blue-600 text-white font-bold py-2 rounded-lg hover:bg-blue-700 transition">Masuk</button>
             </form>
@@ -54,7 +54,7 @@
                     <h1 class="text-xl font-bold text-gray-800">Penginputan Nilai Rapor</h1>
                     <p class="text-sm text-gray-500">Wali Kelas: <span id="user-nama" class="font-semibold text-blue-600"></span> | Rombel: <span id="user-rombel" class="font-bold text-blue-600"></span></p>
                 </div>
-                <button onclick="logout()" class="bg-red-500 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-red-600">Keluar</button>
+                <button onclick="logout()" class="bg-red-500 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-red-600 transition">Keluar</button>
             </div>
 
             <!-- Filter Mata Pelajaran -->
@@ -101,7 +101,6 @@
     </div>
 
     <script>
-        // PASTEKAN WEB APP URL DARI GOOGLE APPS SCRIPT DI SINI
         const API_URL = "https://script.google.com/macros/s/AKfycbzSkVz-kQ-oV9tJSdlLIVp-ZpyM1e3rTBjAtAResso88WMlWoEF7ynq7vzWSCOlkknj/exec";
 
         let currentSession = null;
@@ -114,25 +113,37 @@
         async function apiCall(data) {
             showLoading(true);
             try {
+                // Perbaikan: gunakan redirect: "follow" dan penanganan Content-Type untuk Apps Script
                 const response = await fetch(API_URL, {
                     method: "POST",
-                    body: JSON.stringify(data)
+                    mode: "cors",
+                    headers: {
+                        "Content-Type": "text/plain;charset=utf-8"
+                    },
+                    body: JSON.stringify(data),
+                    redirect: "follow"
                 });
+
+                if (!response.ok) {
+                    throw new Error("HTTP error! status: " + response.status);
+                }
+
                 const result = await response.json();
                 showLoading(false);
                 return result;
             } catch (err) {
                 showLoading(false);
-                alert("Terjadi kesalahan koneksi!");
-                console.error(err);
+                alert("Terjadi kesalahan koneksi! Periksa koneksi internet atau hak akses Apps Script.");
+                console.error("API Call Error:", err);
+                return null;
             }
         }
 
         // --- AUTH SYSTEM ---
         async function handleLogin(e) {
             e.preventDefault();
-            const username = document.getElementById("username").value;
-            const password = document.getElementById("password").value;
+            const username = document.getElementById("username").value.trim();
+            const password = document.getElementById("password").value.trim();
 
             const res = await apiCall({ action: "login", username, password });
 
@@ -145,7 +156,7 @@
                 document.getElementById("view-dashboard").classList.remove("hidden");
 
                 await initDashboard();
-            } else {
+            } else if (res) {
                 alert(res.message || "Login gagal!");
             }
         }
@@ -175,9 +186,11 @@
 
         async function loadNilai() {
             const mapel = document.getElementById("select-mapel").value;
+            if (!mapel) return;
+
             const res = await apiCall({ action: "getNilai", rombel: currentSession.rombel, mapel });
 
-            const scores = res.success ? res.nilai : {};
+            const scores = (res && res.success) ? res.nilai : {};
             renderTable(scores);
         }
 
@@ -185,7 +198,7 @@
             const tbody = document.getElementById("table-body");
             tbody.innerHTML = "";
 
-            if (siswaData.length === 0) {
+            if (!siswaData || siswaData.length === 0) {
                 tbody.innerHTML = `<tr><td colspan="9" class="p-4 text-center text-gray-500">Tidak ada data siswa di rombel ini.</td></tr>`;
                 return;
             }
@@ -259,7 +272,7 @@
 
             if (res && res.success) {
                 alert("Berhasil! " + res.message);
-            } else {
+            } else if (res) {
                 alert("Gagal menyimpan nilai!");
             }
         }
